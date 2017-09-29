@@ -24,7 +24,8 @@
 #' @return [\code{\link{ClusterFunctions}}].
 #' @family ClusterFunctions
 #' @export
-makeClusterFunctionsLSF = function(template = findTemplateFile("lsf"), scheduler.latency = 1, fs.latency = 65) { # nocov start
+makeClusterFunctionsLSF = function(template = "lsf", scheduler.latency = 1, fs.latency = 65) { # nocov start
+  template = findTemplateFile(template)
   template = cfReadBrewTemplate(template)
 
   # When LSB_BJOBS_CONSISTENT_EXIT_CODE = Y, the bjobs command exits with 0 only
@@ -36,7 +37,7 @@ makeClusterFunctionsLSF = function(template = findTemplateFile("lsf"), scheduler
     assertRegistry(reg, writeable = TRUE)
     assertClass(jc, "JobCollection")
     outfile = cfBrewTemplate(reg, template, jc)
-    res = runOSCommand("bsub", stdin = outfile)
+    res = runOSCommand("bsub", stdin = shQuote(outfile))
 
     if (res$exit.code > 0L) {
       cfHandleUnknownSubmitError("bsub", res$exit.code, res$output)
@@ -46,24 +47,23 @@ makeClusterFunctionsLSF = function(template = findTemplateFile("lsf"), scheduler
     }
   }
 
-  listJobs = function(reg, cmd) {
-    res = runOSCommand(cmd[1L], cmd[-1L])
+  listJobs = function(reg, args) {
+    assertRegistry(reg, writeable = FALSE)
+    res = runOSCommand("bjobs", args)
     if (res$exit.code > 0L) {
       if (res$exit.code == 255L || any(stri_detect_regex(res$output, "No (unfinished|pending|running) job found")))
         return(character(0L))
-      stopf("Command '%s' produced exit code: %i; output: %s", stri_flatten(cmd, " "), res$exit.code, res$output)
+      OSError("Listing of jobs failed", res)
     }
     stri_extract_first_regex(tail(res$output, -1L), "\\d+")
   }
 
   listJobsQueued = function(reg) {
-    assertRegistry(reg, writeable = FALSE)
-    listJobs(reg, c("bjobs", "-u $USER", "-w", "-p"))
+    listJobs(reg, c("-u $USER", "-w", "-p"))
   }
 
   listJobsRunning = function(reg) {
-    assertRegistry(reg, writeable = FALSE)
-    listJobs(reg, c("bjobs", "-u $USER", "-w", "-r"))
+    listJobs(reg, c("-u $USER", "-w", "-r"))
   }
 
   killJob = function(reg, batch.id) {
@@ -73,5 +73,5 @@ makeClusterFunctionsLSF = function(template = findTemplateFile("lsf"), scheduler
   }
 
   makeClusterFunctions(name = "LSF", submitJob = submitJob, killJob = killJob, listJobsQueued = listJobsQueued,
-    listJobsRunning = listJobsRunning, store.job = TRUE, scheduler.latency = scheduler.latency, fs.latency = fs.latency)
+    listJobsRunning = listJobsRunning, store.job.collection = TRUE, scheduler.latency = scheduler.latency, fs.latency = fs.latency)
 } # nocov end

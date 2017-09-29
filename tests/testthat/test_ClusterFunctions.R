@@ -4,7 +4,7 @@ test_that("clusterFunctions constructor", {
   check = function(cf) {
     expect_is(cf, "ClusterFunctions")
     expect_set_equal(names(cf), c("name", "submitJob", "killJob", "listJobsQueued", "listJobsRunning",
-        "store.job", "array.var", "scheduler.latency", "fs.latency", "hooks"))
+        "store.job.collection", "store.job.files", "array.var", "scheduler.latency", "fs.latency", "hooks"))
     expect_output(print(cf), "ClusterFunctions for mode")
   }
   reg = makeRegistry(file.dir = NA, make.default = FALSE)
@@ -15,10 +15,10 @@ test_that("clusterFunctions constructor", {
   check(makeClusterFunctionsSlurm(template = "foo\n"))
   check(makeClusterFunctionsOpenLava(template = "foo\n"))
   check(makeClusterFunctionsLSF(template = "foo\n"))
-  check(makeClusterFunctionsTORQUE(system.file(file.path("templates", "torque_lido.tmpl"), package = "batchtools")))
-  check(makeClusterFunctionsSlurm(system.file(file.path("templates", "slurm_dortmund.tmpl"), package = "batchtools")))
+  check(makeClusterFunctionsTORQUE("torque-lido"))
+  check(makeClusterFunctionsSlurm("slurm-dortmund"))
   check(makeClusterFunctionsDocker("image"))
-  expect_error(makeClusterFunctionsLSF(), "No template")
+  expect_error(makeClusterFunctionsLSF(), "point to a template file")
 
   skip_on_os(c("windows", "solaris")) # system2 is broken on solaris
     check(makeClusterFunctionsSSH(workers = list(Worker$new(nodename = "localhost", ncpus = 1L))))
@@ -71,13 +71,26 @@ test_that("brew", {
   expect_equal(brewed[2], sprintf("foo=%s", jc$job.hash))
 })
 
+test_that("Special chars in directory names", {
+  reg = makeRegistry(NA, make.default = FALSE)
+  base.dir = tempfile(pattern = "test", tmpdir = dirname(reg$file.dir))
+  dir.create(base.dir, recursive = TRUE)
+
+  file.dir = fp(base.dir, "test#some_frequently-used chars")
+  reg = makeRegistry(file.dir, make.default = FALSE)
+  batchMap(identity, 1:2, reg = reg)
+  submitAndWait(reg = reg)
+  expect_equal(reduceResultsList(reg = reg), list(1L, 2L))
+  expect_equal(testJob(1, external = TRUE, reg = reg), 1L)
+})
+
 test_that("Export of environment variable DEBUGME", {
   reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  if (reg$cluster.functions$name == "Socket")
+    skip("Environment variables not exported for CF socket")
   batchMap(function(i) Sys.getenv("DEBUGME"), i = 1, reg = reg)
 
-  prev = Sys.getenv("DEBUGME")
-  on.exit(Sys.setenv(DEBUGME = prev))
-  Sys.setenv(DEBUGME = "grepme")
+  withr::local_envvar(c("DEBUGME" = "grepme"))
   submitAndWait(reg, 1)
 
   res = loadResult(1, reg = reg)

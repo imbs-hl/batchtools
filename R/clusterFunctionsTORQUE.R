@@ -20,7 +20,8 @@
 #' @return [\code{\link{ClusterFunctions}}].
 #' @family ClusterFunctions
 #' @export
-makeClusterFunctionsTORQUE = function(template = findTemplateFile("torque"), scheduler.latency = 1, fs.latency = 65) { # nocov start
+makeClusterFunctionsTORQUE = function(template = "torque", scheduler.latency = 1, fs.latency = 65) { # nocov start
+  template = findTemplateFile(template)
   template = cfReadBrewTemplate(template, "##")
 
   submitJob = function(reg, jc) {
@@ -28,7 +29,7 @@ makeClusterFunctionsTORQUE = function(template = findTemplateFile("torque"), sch
     assertClass(jc, "JobCollection")
 
     outfile = cfBrewTemplate(reg, template, jc)
-    res = runOSCommand("qsub", outfile)
+    res = runOSCommand("qsub", shQuote(outfile))
 
     max.jobs.msg = "Maximum number of jobs already in queue"
     output = stri_flatten(stri_trim_both(res$output), "\n")
@@ -53,19 +54,25 @@ makeClusterFunctionsTORQUE = function(template = findTemplateFile("torque"), sch
     cfKillJob(reg, "qdel", batch.id)
   }
 
-  listJobsQueued = function(reg) {
+  listJobs = function(reg, args) {
     assertRegistry(reg, writeable = FALSE)
-    cmd = c("qselect", "-u $USER", "-s QW")
-    runOSCommand(cmd[1L], cmd[-1L])$output
+    res = runOSCommand("qselect", args)
+    if (res$exit.code > 0L)
+      OSError("Listing of jobs failed", res)
+    res$output
+  }
+
+  listJobsQueued = function(reg) {
+    args = c("-u $USER", "-s QW")
+    listJobs(reg, args)
   }
 
   listJobsRunning = function(reg) {
-    assertRegistry(reg, writeable = FALSE)
-    cmd = c("qselect", "-u $USER", "-s EHRT")
-    runOSCommand(cmd[1L], cmd[-1L])$output
+    args = c("-u $USER", "-s EHRT")
+    listJobs(reg, args)
   }
 
   makeClusterFunctions(name = "TORQUE", submitJob = submitJob, killJob = killJob, listJobsQueued = listJobsQueued,
-    listJobsRunning = listJobsRunning, array.var = "PBS_ARRAYID", store.job = TRUE,
+    listJobsRunning = listJobsRunning, array.var = "PBS_ARRAYID", store.job.collection = TRUE,
     scheduler.latency = scheduler.latency, fs.latency = fs.latency)
 } # nocov end

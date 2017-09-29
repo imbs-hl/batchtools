@@ -4,7 +4,7 @@
 \alias{submitJobs}
 \title{Submit Jobs to the Batch Systems}
 \usage{
-submitJobs(ids = NULL, resources = list(), sleep = default.sleep,
+submitJobs(ids = NULL, resources = list(), sleep = NULL,
   reg = getDefaultRegistry())
 }
 \arguments{
@@ -12,7 +12,8 @@ submitJobs(ids = NULL, resources = list(), sleep = default.sleep,
 A \code{\link[base]{data.frame}} (or \code{\link[data.table]{data.table}})
 with a column named \dQuote{job.id}.
 Alternatively, you may also pass a vector of integerish job ids.
-If not set, defaults to the return value of \code{\link{findNotSubmitted}}.}
+If not set, defaults to the return value of \code{\link{findNotSubmitted}}.
+Invalid ids are ignored.}
 
 \item{resources}{[\code{named list}]\cr
 Computational  resources for the batch jobs. The elements of this list
@@ -22,8 +23,11 @@ Defaults can be stored in the configuration file by providing the named list \co
 Settings in \code{resources} overwrite those in \code{default.resources}.}
 
 \item{sleep}{[\code{function(i)} | \code{numeric(1)}]\cr
-Function which returns the duration to sleep in the \code{i}-th iteration between temporary errors.
-Alternatively, you can pass a single positive numeric value.}
+Parameter to control the duration to sleep between temporary errors.
+You can pass an absolute numeric value in seconds or a \code{function(i)} which returns the number of seconds to sleep in the \code{i}-th
+iteration between temporary errors.
+If not provided (\code{NULL}), tries to read the value (number/function) from the configuration file (stored in \code{reg$sleep}) or defaults to
+a function with exponential backoff between 5 and 120 seconds.}
 
 \item{reg}{[\code{\link{Registry}}]\cr
 Registry. If not explicitly passed, uses the default registry (see \code{\link{setDefaultRegistry}}).}
@@ -84,7 +88,7 @@ tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 fun = function(n, p) colMeans(matrix(runif(n*p), n, p))
 
 # Arguments to fun:
-args = expand.grid(n = c(1e4, 1e5), p = c(10, 50))
+args = CJ(n = c(1e4, 1e5), p = c(10, 50)) # like expand.grid()
 print(args)
 
 # Map function to create jobs

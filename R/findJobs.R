@@ -2,11 +2,13 @@
 #'
 #' @description
 #' These functions are used to find and filter jobs, depending on either their parameters (\code{findJobs} and
-#' \code{findExperiments}), their tags (\code{findTagged}), or their computational status (all other functions).
+#' \code{findExperiments}), their tags (\code{findTagged}), or their computational status (all other functions,
+#' see \code{\link{getStatus}} for an overview).
 #'
-#' For a summarizing overview over the status, see \code{\link{getStatus}}.
-#' Note that \code{findOnSystem} and \code{findExpired} are somewhat heuristic and may report misleading results,
-#' depending on the state of the system and the \code{\link{ClusterFunctions}} implementation.
+#' Note that \code{findQueued}, \code{findRunning}, \code{findOnSystem} and \code{findExpired} are somewhat heuristic
+#' and may report misleading results, depending on the state of the system and the \code{\link{ClusterFunctions}} implementation.
+#'
+#' See \code{\link{JoinTables}} for convenient set operations (unions, intersects, differences) on tables with job ids.
 #'
 #' @param expr [\code{expression}]\cr
 #'   Predicate expression evaluated in the job parameters.
@@ -15,6 +17,7 @@
 #' @template ids
 #' @template reg
 #' @return [\code{\link{data.table}}] with column \dQuote{job.id} containing matched jobs.
+#' @seealso \code{\link{getStatus}} \code{\link{JoinTables}}<`3`>
 #' @export
 #' @examples
 #' tmp = makeRegistry(file.dir = NA, make.default = FALSE)
@@ -54,13 +57,13 @@ findJobs = function(expr, ids = NULL, reg = getDefaultRegistry()) {
 #' @export
 #' @rdname findJobs
 #' @param prob.name [\code{character}]\cr
-#'   Fixed string to match problem names.
+#'   Exact name of the problem (no substring matching).
 #'   If not provided, all problems are matched.
 #' @param prob.pattern [\code{character}]\cr
 #'   Regular expression pattern to match problem names.
 #'   If not provided, all problems are matched.
 #' @param algo.name [\code{character}]\cr
-#'   Fixed string to match algorithm names.
+#'   Exact name of the problem (no substring matching).
 #'   If not provided, all algorithms are matched.
 #' @param algo.pattern [\code{character}]\cr
 #'   Regular expression pattern to match algorithm names.
@@ -71,7 +74,7 @@ findJobs = function(expr, ids = NULL, reg = getDefaultRegistry()) {
 #'   Predicate expression evaluated in the algorithm parameters.
 #' @param repls [\code{integer}]\cr
 #'   Whitelist of replication numbers. If not provided, all replications are matched.
-findExperiments = function(prob.name = NA_character_, prob.pattern = NA_character_, algo.name = NA_character_, algo.pattern = NA_character_, prob.pars, algo.pars, repls = NULL, ids = NULL, reg = getDefaultRegistry()) {
+findExperiments = function(ids = NULL, prob.name = NA_character_, prob.pattern = NA_character_, algo.name = NA_character_, algo.pattern = NA_character_, prob.pars, algo.pars, repls = NULL, reg = getDefaultRegistry()) {
   assertExperimentRegistry(reg, sync = TRUE)
   assertString(prob.name, na.ok = TRUE, min.chars = 1L)
   assertString(prob.pattern, na.ok = TRUE, min.chars = 1L)
@@ -82,7 +85,7 @@ findExperiments = function(prob.name = NA_character_, prob.pattern = NA_characte
 
   if (!is.na(prob.name)) {
     problem = NULL
-    tab = tab[stri_detect_fixed(problem, prob.name)]
+    tab = tab[problem == prob.name]
   }
 
   if (!is.na(prob.pattern)) {
@@ -92,7 +95,7 @@ findExperiments = function(prob.name = NA_character_, prob.pattern = NA_characte
 
   if (!is.na(algo.name)) {
     algorithm = NULL
-    tab = tab[stri_detect_fixed(algorithm, algo.name)]
+    tab = tab[algorithm == algo.name]
   }
 
   if (!is.na(algo.pattern)) {
@@ -157,9 +160,10 @@ findStarted = function(ids = NULL, reg = getDefaultRegistry()) {
   .findStarted(reg, convertIds(reg, ids))
 }
 
-.findStarted = function(reg, ids = NULL) {
-  started = NULL
-  filter(reg$status, ids, c("job.id", "started"))[!is.na(started), "job.id"]
+.findStarted = function(reg, ids = NULL, batch.ids = getBatchIds(reg, status = "running")) {
+  started = batch.id = status = NULL
+  bids = batch.ids[status == "running"]$batch.id
+  filter(reg$status, ids, c("job.id", "started", "batch.id"))[!is.na(started) | batch.id %in% bids, "job.id"]
 }
 
 
@@ -170,9 +174,10 @@ findNotStarted = function(ids = NULL, reg = getDefaultRegistry()) {
   .findNotStarted(reg, convertIds(reg, ids))
 }
 
-.findNotStarted = function(reg, ids = NULL) {
-  started = NULL
-  filter(reg$status, ids, c("job.id", "started"))[is.na(started), "job.id"]
+.findNotStarted = function(reg, ids = NULL, batch.ids = getBatchIds(reg, status = "running")) {
+  started = batch.id = status = NULL
+  bids = batch.ids[status == "running"]$batch.id
+  filter(reg$status, ids, c("job.id", "started", "batch.id"))[is.na(started) & ! batch.id %chin% bids, "job.id"]
 }
 
 
@@ -215,6 +220,13 @@ findErrors = function(ids = NULL, reg = getDefaultRegistry()) {
 }
 
 
+# used in waitForJobs: find jobs which are done or error
+.findTerminated = function(reg, ids = NULL) {
+  done = NULL
+  filter(reg$status, ids, c("job.id", "done"))[!is.na(done), "job.id"]
+}
+
+
 #' @export
 #' @rdname findJobs
 findOnSystem = function(ids = NULL, reg = getDefaultRegistry()) {
@@ -253,7 +265,7 @@ findExpired = function(ids = NULL, reg = getDefaultRegistry()) {
 
 .findExpired = function(reg, ids = NULL, batch.ids = getBatchIds(reg)) {
   submitted = done = batch.id = NULL
-  filter(reg$status, ids, c("job.id", "submitted", "done", "batch.id"))[!is.na(submitted) & is.na(done) & batch.id %nin% batch.ids$batch.id, "job.id"]
+  filter(reg$status, ids, c("job.id", "submitted", "done", "batch.id"))[!is.na(submitted) & is.na(done) & batch.id %chnin% batch.ids$batch.id, "job.id"]
 }
 
 #' @export
@@ -266,5 +278,5 @@ findTagged = function(tags = character(0L), ids = NULL, reg = getDefaultRegistry
   assertCharacter(tags, any.missing = FALSE, pattern = "^[[:alnum:]_.]+$", min.len = 1L)
   tag = NULL
 
-  ids[unique(reg$tags[tag %in% tags, "job.id"], by = "job.id")]
+  ids[unique(reg$tags[tag %chin% tags, "job.id"], by = "job.id")]
 }

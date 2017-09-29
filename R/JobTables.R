@@ -12,8 +12,8 @@
 #' @template ids
 #' @param flatten [\code{logical(1)}]\cr
 #'   Transform the job parameters and/or resource specifications to data frame columns?
-#'   Defaults to \code{TRUE} if all parameters or resources are atomics,
-#'   \code{FALSE} otherwise where each row of the column will hold a named list.
+#'   Defaults to \code{TRUE} if all parameters (or resources) are scalar atomics.
+#'   Otherwise each row of the column will hold a named list.
 #'   New columns will be named using \code{prefix}.
 #' @param prefix [\code{logical(1)}]\cr
 #'   If set to \code{TRUE}, the prefix \dQuote{par.} is used to name column names of parameters
@@ -136,7 +136,7 @@ getJobPars.ExperimentRegistry = function(ids = NULL, flatten = NULL, prefix = FA
   ids = convertIds(reg, ids)
   tab = mergedJobs(reg, ids, c("job.id", "pars", "problem", "algorithm"))
 
-  if (flatten %??% qtestr(tab$pars, c("v1", "L"), depth = 2L)) {
+  if (flatten %??% qtestr(tab$pars, c("v1", "L"), depth = 3L)) {
     new.cols = rbindlist(.mapply(function(job.id, pars, ...) c(list(job.id = job.id), unlist(pars, recursive = FALSE)), tab, list()), fill = TRUE)
     if (ncol(new.cols) >= 2L) {
       pattern = "^(prob|algo)\\.pars\\."
