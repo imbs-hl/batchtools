@@ -118,7 +118,7 @@ getJobPars.Registry = function(ids = NULL, flatten = NULL, prefix = FALSE, reg =
   tab = mergedJobs(reg, ids, c("job.id", "pars"))
 
   if (flatten %??% qtestr(tab$pars, c("v1", "L"), depth = 2L)) {
-    new.cols = rbindlist(tab$pars)
+    new.cols = rbindlist(lapply(tab$pars, function(e, ...) as.list(unlist(e, ...)), recursive = TRUE))
     if (ncol(new.cols) > 0L) {
       if (prefix)
         setnames(new.cols, names(new.cols), stri_join("par.", names(new.cols)))
