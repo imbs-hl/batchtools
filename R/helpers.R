@@ -98,13 +98,17 @@ stopf = function (...) {
   !match(x, y, nomatch = 0L)
 }
 
+`%chnin%` = function(x, y) {
+  !chmatch(x, y, nomatch = 0L)
+}
+
 setClasses = function(x, cl) {
   setattr(x, "class", cl)
   x
 }
 
 addlevel = function(x, lvl) {
-  if (lvl %nin% levels(x))
+  if (lvl %chnin% levels(x))
     levels(x) = c(levels(x), lvl)
   x
 }
@@ -143,17 +147,6 @@ getSeed = function(start.seed, id) {
     start.seed - .Machine$integer.max + id
   else
     start.seed + id
-}
-
-with_seed = function(seed, expr) {
-  if (!is.null(seed)) {
-    if (!exists(".Random.seed", .GlobalEnv))
-      set.seed(NULL)
-    state = get(".Random.seed", .GlobalEnv)
-    set.seed(seed)
-    on.exit(assign(".Random.seed", state, envir = .GlobalEnv))
-  }
-  eval.parent(expr)
 }
 
 chsetdiff = function(x, y) {

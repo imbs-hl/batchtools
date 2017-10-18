@@ -148,6 +148,7 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
     batch.id    = character(0L),
     log.file    = character(0L),
     job.hash    = character(0L),
+    job.name    = character(0L),
     key         = "job.id")
 
   reg$resources = data.table(
@@ -174,6 +175,7 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
 
   class(reg) = "Registry"
   saveRegistry(reg)
+  reg$mtime = file.mtime(fp(reg$file.dir, "registry.rds"))
   info("Created registry in '%s' using cluster functions '%s'", reg$file.dir, reg$cluster.functions$name)
   if (make.default)
     batchtools$default.registry = reg
@@ -183,11 +185,12 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
 #' @export
 print.Registry = function(x, ...) {
   cat("Job Registry\n")
-  catf("  ClusterFunction : %s", x$cluster.functions$name)
-  catf("  File dir        : %s", x$file.dir)
-  catf("  Work dir        : %s", x$work.dir)
-  catf("  Jobs            : %i", nrow(x$status))
-  catf("  Seed            : %i", x$seed)
+  catf("  Backend  : %s", x$cluster.functions$name)
+  catf("  File dir : %s", x$file.dir)
+  catf("  Work dir : %s", x$work.dir)
+  catf("  Jobs     : %i", nrow(x$status))
+  catf("  Seed     : %i", x$seed)
+  catf("  Writeable: %s", x$writeable)
 }
 
 assertRegistry = function(reg, writeable = FALSE, sync = FALSE, strict = FALSE, running.ok = TRUE) {
@@ -200,13 +203,21 @@ assertRegistry = function(reg, writeable = FALSE, sync = FALSE, strict = FALSE, 
     if (!identical(key(reg$resources), "resource.id"))
       stop("Key of reg$resources lost")
   }
-  if (reg$writeable) {
-    if (sync || !running.ok)
-      syncRegistry(reg)
-  } else {
-    if (writeable)
-      stop("Registry must be writeable")
+
+
+  if (reg$writeable && !identical(reg$mtime, file.mtime(fp(reg$file.dir, "registry.rds")))) {
+    warning("Registry has been altered since last read. Switching to read-only mode in this session.")
+    reg$writeable = FALSE
   }
+
+  if (writeable && !reg$writeable)
+    stop("Registry must be writeable")
+
+  if (sync || !running.ok) {
+    if (sync(reg))
+      saveRegistry(reg)
+  }
+
   if (!running.ok && nrow(.findOnSystem(reg = reg)) > 0L)
     stop("This operation is not allowed while jobs are running on the system")
   invisible(TRUE)

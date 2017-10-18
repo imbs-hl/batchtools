@@ -26,14 +26,23 @@
 #'  Note that you should not select the cluster in your template file via \code{#SBATCH --clusters}.
 #' @param array.jobs [\code{logical(1)}]\cr
 #'  If array jobs are disabled on the computing site, set to \code{FALSE}.
+#' @param nodename [\code{character(1)}]\cr
+#'  Nodename of the master. All commands are send via SSH to this host. Only works iff
+#'  \enumerate{
+#'    \item{Passwordless authentication (e.g., via SSH public key authentication) is set up.}
+#'    \item{The file directory is shared across machines, e.g. mounted via SSHFS.}
+#'    \item{The absolute path to the \code{file.dir} are identical on the machines, or paths are provided relative to the
+#'      home directory.}
+#'  }
 #' @inheritParams makeClusterFunctions
 #' @return [\code{\link{ClusterFunctions}}].
 #' @family ClusterFunctions
 #' @export
-makeClusterFunctionsSlurm = function(template = "slurm", clusters = NULL, array.jobs = TRUE, scheduler.latency = 1, fs.latency = 65, nodename = "localhost") { # nocov start
+makeClusterFunctionsSlurm = function(template = "slurm", clusters = NULL, array.jobs = TRUE, nodename = "localhost", scheduler.latency = 1, fs.latency = 65) { # nocov start
   if (!is.null(clusters))
     assertString(clusters, min.chars = 1L)
   assertFlag(array.jobs)
+  assertString(nodename)
   template = findTemplateFile(template)
   template = cfReadBrewTemplate(template, "##")
 
@@ -72,35 +81,33 @@ makeClusterFunctionsSlurm = function(template = "slurm", clusters = NULL, array.
     }
   }
 
-  listJobsQueued = function(reg) {
+  listJobs = function(reg, args) {
     assertRegistry(reg, writeable = FALSE)
-    cmd = c("squeue", "-h", "-o %i", "-u $USER", "-t PD", sprintf("--clusters=%s", clusters))
     if (array.jobs)
-      cmd = c(cmd, "-r")
-    batch.ids = runOSCommand(cmd[1L], cmd[-1L], nodename = nodename)$output
-    if (!is.null(clusters))
-      batch.ids = tail(batch.ids, -1L)
-    batch.ids
+      args = c(args, "-r")
+    res = runOSCommand("squeue", args, nodename = nodename)
+    if (res$exit.code > 0L)
+      OSError("Listing of jobs failed", res)
+    if (!is.null(clusters)) tail(res$output, -1L) else res$output
+  }
+
+  listJobsQueued = function(reg) {
+    args = c("-h", "-o %i", "-u $USER", "-t PD", sprintf("--clusters=%s", clusters))
+    listJobs(reg, args)
   }
 
   listJobsRunning = function(reg) {
-    assertRegistry(reg, writeable = FALSE)
-    cmd = c("squeue", "-h", "-o %i", "-u $USER", "-t R,S,CG", sprintf("--clusters=%s", clusters))
-    if (array.jobs)
-      cmd = c(cmd, "-r")
-    batch.ids = runOSCommand(cmd[1L], cmd[-1L], nodename = nodename)$output
-    if (!is.null(clusters))
-      batch.ids = tail(batch.ids, -1L)
-    batch.ids
+    args = c("-h", "-o %i", "-u $USER", "-t R,S,CG", sprintf("--clusters=%s", clusters))
+    listJobs(reg, args)
   }
 
   killJob = function(reg, batch.id) {
     assertRegistry(reg, writeable = TRUE)
     assertString(batch.id)
-    cfKillJob(reg, "scancel", c(sprintf("--clusters=%s", clusters), batch.id))
+    cfKillJob(reg, "scancel", c(sprintf("--clusters=%s", clusters), batch.id), nodename = nodename)
   }
 
   makeClusterFunctions(name = "Slurm", submitJob = submitJob, killJob = killJob, listJobsRunning = listJobsRunning,
-                       listJobsQueued = listJobsQueued, array.var = "SLURM_ARRAY_TASK_ID", store.job = TRUE,
-                       scheduler.latency = scheduler.latency, fs.latency = fs.latency)
+    listJobsQueued = listJobsQueued, array.var = "SLURM_ARRAY_TASK_ID", store.job.collection = TRUE,
+    store.job.files = !isLocalHost(nodename), scheduler.latency = scheduler.latency, fs.latency = fs.latency)
 } # nocov end
