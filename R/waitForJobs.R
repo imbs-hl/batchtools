@@ -35,7 +35,7 @@
 #'   successfully and \code{FALSE} if either the timeout is reached or at least
 #'   one job terminated with an exception.
 #' @export
-waitForJobs = function(ids = NULL, sleep = default.sleep, timeout = 604800, stop.on.error = FALSE, warn.disappeared = TRUE, reg = getDefaultRegistry()) {
+waitForJobs = function(ids = NULL, sleep = NULL, timeout = 604800, expire.after = 3L, stop.on.error = FALSE, stop.on.expire = FALSE, reg = getDefaultRegistry()) {
   assertRegistry(reg, writeable = FALSE, sync = TRUE)
   assertNumber(timeout, lower = 0)
   assertCount(expire.after, positive = TRUE)
