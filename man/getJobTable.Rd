@@ -8,16 +8,13 @@
 \alias{getJobTags}
 \title{Query Job Information}
 \usage{
-getJobTable(ids = NULL, flatten = NULL, prefix = FALSE,
-  reg = getDefaultRegistry())
+getJobTable(ids = NULL, reg = getDefaultRegistry())
 
 getJobStatus(ids = NULL, reg = getDefaultRegistry())
 
-getJobResources(ids = NULL, flatten = NULL, prefix = FALSE,
-  reg = getDefaultRegistry())
+getJobResources(ids = NULL, reg = getDefaultRegistry())
 
-getJobPars(ids = NULL, flatten = NULL, prefix = FALSE,
-  reg = getDefaultRegistry())
+getJobPars(ids = NULL, reg = getDefaultRegistry())
 
 getJobTags(ids = NULL, reg = getDefaultRegistry())
 }
@@ -28,17 +25,6 @@ with a column named \dQuote{job.id}.
 Alternatively, you may also pass a vector of integerish job ids.
 If not set, defaults to all jobs.
 Invalid ids are ignored.}
-
-\item{flatten}{[\code{logical(1)}]\cr
-Transform the job parameters and/or resource specifications to data frame columns?
-Defaults to \code{TRUE} if all parameters (or resources) are scalar atomics.
-Otherwise each row of the column will hold a named list.
-New columns will be named using \code{prefix}.}
-
-\item{prefix}{[\code{logical(1)}]\cr
-If set to \code{TRUE}, the prefix \dQuote{par.} is used to name column names of parameters
-for a \code{\link{Registry}} and prefixes \dQuote{prob.par.} and \dQuote{algo.par.} are used to name
-the columns of a \code{\link{ExperimentRegistry}}. Resources are prefixed with \dQuote{res.}.}
 
 \item{reg}{[\code{\link{Registry}}]\cr
 Registry. If not explicitly passed, uses the default registry (see \code{\link{setDefaultRegistry}}).}
@@ -51,14 +37,14 @@ Registry. If not explicitly passed, uses the default registry (see \code{\link{s
     \item{started}{Time the job was started on the batch system as \code{\link[base]{POSIXct}}.}
     \item{done}{Time the job terminated (successfully or with an error) as \code{\link[base]{POSIXct}}.}
     \item{error}{Either \code{NA} if the job terminated successfully or the error message.}
-    \item{memory}{Estimate of the memory usage.}
+    \item{mem.used}{Estimate of the memory usage.}
     \item{batch.id}{Batch ID as reported by the scheduler.}
     \item{log.file}{Log file. If missing, defaults to \code{[job.hash].log}.}
     \item{job.hash}{Unique string identifying the job or chunk.}
     \item{time.queued}{Time in seconds (as \code{\link[base]{difftime}}) the job was queued.}
     \item{time.running}{Time in seconds (as \code{\link[base]{difftime}}) the job was running.}
-    \item{pars}{List of parameters/arguments for this job. Possibly expanded to separate columns (see \code{prefix}.}
-    \item{resources}{List of computational resources set for this job. Possibly expanded to separate columns (see \code{prefix}.}
+    \item{pars}{List of parameters/arguments for this job.}
+    \item{resources}{List of computational resources set for this job.}
     \item{tags}{Tags as joined string, delimited by \dQuote{,}.}
     \item{problem}{Only for \code{\link{ExperimentRegistry}}: the problem identifier.}
     \item{algorithm}{Only for \code{\link{ExperimentRegistry}}: the algorithm identifier.}
@@ -73,6 +59,7 @@ with the resources which were set to submit the jobs, and \code{getJobTags} the 
 \code{getJobTable} returns all these tables joined.
 }
 \examples{
+\dontshow{ batchtools:::example_push_temp(1) }
 tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 f = function(x) if (x < 0) stop("x must be > 0") else sqrt(x)
 batchMap(f, x = c(-1, 0, 1), reg = tmp)
@@ -82,10 +69,10 @@ addJobTags(1:2, "tag1", reg = tmp)
 addJobTags(2, "tag2", reg = tmp)
 
 # Complete table:
-getJobTable(reg = tmp, flatten = FALSE)
+getJobTable(reg = tmp)
 
 # Job parameters:
-getJobPars(reg = tmp, flatten = FALSE)
+getJobPars(reg = tmp)
 
 # Set and retrieve tags:
 getJobTags(reg = tmp)

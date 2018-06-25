@@ -21,6 +21,16 @@
 #' \code{\link{clearRegistry}} completely erases all jobs from a registry, including log files and results,
 #' and thus allows you to start over.
 #'
+#' @details
+#' Currently \pkg{batchtools} understands the following options set via the configuration file:
+#' \describe{
+#'   \item{\code{cluster.functions}:}{As returned by a constructor, e.g. \code{\link{makeClusterFunctionsSlurm}}.}
+#'   \item{\code{default.resources}:}{List of resources to use. Will be overruled by resources specified via \code{\link{submitJobs}}.}
+#'   \item{\code{temp.dir}:}{Path to directory to use for temporary registries.}
+#'   \item{\code{sleep}:}{Custom sleep function. See \code{\link{waitForJobs}}.}
+#'   \item{\code{expire.after}:}{Number of iterations before treating jobs as expired in \code{\link{waitForJobs}}.}
+#' }
+#'
 #' @param file.dir [\code{character(1)}]\cr
 #'   Path where all files of the registry are saved.
 #'   Default is directory \dQuote{registry} in the current working directory.
@@ -42,17 +52,21 @@
 #'   (i.e., starting with \dQuote{~}). Note that some templates do not handle relative paths well.
 #' @param conf.file [\code{character(1)}]\cr
 #'   Path to a configuration file which is sourced while the registry is created.
-#'   For example, you can set cluster functions or default resources in it.
-#'   The script is executed inside the environment of the registry after the defaults for all variables are set,
-#'   thus you can set and overwrite slots, e.g. \code{default.resources = list(walltime = 3600)} to set default resources.
+#'   In the configuration file you can define how \pkg{batchtools} interacts with the system via \code{\link{ClusterFunctions}}.
+#'   Separating the configuration of the underlying host system from the R code allows to easily move computation to another site.
 #'
-#'   The file lookup defaults to a heuristic which first tries to read \dQuote{batchtools.conf.R} in the current working directory.
-#'   If not found, it looks for a configuration file \dQuote{config.R} in the OS dependent user configuration directory
-#'   as reported by via \code{rappdirs::user_config_dir("batchtools", expand = FALSE)} (e.g., on linux this
-#'   usually resolves to \dQuote{~/.config/batchtools/config.R}).
-#'   If this file is also not found, the heuristic finally tries to read the file \dQuote{.batchtools.conf.R} in the
-#'   home directory (\dQuote{~}).
-#'   Set to \code{character(0)} if you want to disable this heuristic.
+#'   The file lookup is implemented in the internal (but exported) function \code{findConfFile} which returns the first file found of the following candidates:
+#'   \enumerate{
+#'    \item{File \dQuote{batchtools.conf.R} in the path specified by the environment variable \dQuote{R_BATCHTOOLS_SEARCH_PATH}.}
+#'    \item{File \dQuote{batchtools.conf.R} in the current working directory.}
+#'    \item{File \dQuote{config.R} in the user configuration directory as reported by \code{rappdirs::user_config_dir("batchtools", expand = FALSE)} (depending on OS, e.g., on linux this usually resolves to \dQuote{~/.config/batchtools/config.R}).}
+#'    \item{\dQuote{.batchtools.conf.R} in the home directory (\dQuote{~}).}
+#'    \item{\dQuote{config.R} in the site config directory as reported by \code{rappdirs::site_config_dir("batchtools")} (depending on OS). This file can be used for admins to set sane defaults for a computation site.}
+#'   }
+#'   Set to \code{NA} if you want to suppress reading any configuration file.
+#'   If a configuration file is found, it gets sourced inside the environment of the registry after the defaults for all variables are set.
+#'   Therefore you can set and overwrite slots, e.g. \code{default.resources = list(walltime = 3600)} to set default resources or \dQuote{max.concurrent.jobs} to
+#'   limit the number of jobs allowed to run simultaneously on the system.
 #' @param packages [\code{character}]\cr
 #'   Packages that will always be loaded on each node.
 #'   Uses \code{\link[base]{require}} internally.
@@ -86,16 +100,18 @@
 #'     \item{\code{cluster.functions} [cluster.functions]:}{Usually set in your \code{conf.file}. Set via a call to \code{\link{makeClusterFunctions}}. See example.}
 #'     \item{\code{default.resources} [named list()]:}{Usually set in your \code{conf.file}. Named list of default resources.}
 #'     \item{\code{max.concurrent.jobs} [integer(1)]:}{Usually set in your \code{conf.file}. Maximum number of concurrent jobs for a single user and current registry on the system.
-#'       \code{\link{submitJobs}} will try to respect this setting.}
+#'       \code{\link{submitJobs}} will try to respect this setting. The resource \dQuote{max.concurrent.jobs} has higher precedence.}
 #'     \item{\code{defs} [data.table]:}{Table with job definitions (i.e. parameters).}
 #'     \item{\code{status} [data.table]:}{Table holding information about the computational status. Also see \code{\link{getJobStatus}}.}
 #'     \item{\code{resources} [data.table]:}{Table holding information about the computational resources used for the job. Also see \code{\link{getJobResources}}.}
 #'     \item{\code{tags} [data.table]:}{Table holding information about tags. See \link{Tags}.}
+#'     \item{\code{hash} [character(1)]:}{Unique hash which changes each time the registry gets saved to the file system. Can be utilized to invalidate the cache of \pkg{knitr}.}
 #'   }
 #' @aliases Registry
 #' @family Registry
 #' @export
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(1) }
 #' tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 #' print(tmp)
 #'
@@ -112,17 +128,17 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
     assertPathForOutput(file.dir, overwrite = FALSE)
   assertString(work.dir)
   assertDirectoryExists(work.dir, access = "r")
-  assertCharacter(conf.file, any.missing = FALSE, max.len = 1L)
+  assertString(conf.file, na.ok = TRUE)
   assertCharacter(packages, any.missing = FALSE, min.chars = 1L)
   assertCharacter(namespaces, any.missing = FALSE, min.chars = 1L)
   assertCharacter(source, any.missing = FALSE, min.chars = 1L)
   assertCharacter(load, any.missing = FALSE, min.chars = 1L)
   assertFlag(make.default)
-  seed = if (is.null(seed)) as.integer(runif(1L, 1, .Machine$integer.max / 2L)) else asCount(seed, positive = TRUE)
+  seed = if (is.null(seed)) as.integer(runif(1L, 0, 32768)) else asCount(seed, positive = TRUE)
 
   reg = new.env(parent = asNamespace("batchtools"))
   reg$file.dir = file.dir
-  reg$work.dir = npath(work.dir)
+  reg$work.dir = work.dir
   reg$packages = packages
   reg$namespaces = namespaces
   reg$source = source
@@ -133,7 +149,7 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
 
   reg$defs = data.table(
     def.id    = integer(0L),
-    pars      = list(),
+    job.pars  = list(),
     key       = "def.id")
 
   reg$status = data.table(
@@ -143,7 +159,7 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
     started     = double(0L),
     done        = double(0L),
     error       = character(0L),
-    memory      = double(0L),
+    mem.used    = double(0L),
     resource.id = integer(0L),
     batch.id    = character(0L),
     log.file    = character(0L),
@@ -165,17 +181,20 @@ makeRegistry = function(file.dir = "registry", work.dir = getwd(), conf.file = f
   setSystemConf(reg, conf.file)
 
   if (is.na(file.dir))
-    reg$file.dir = tempfile("registry", tmpdir = reg$temp.dir)
+    reg$file.dir = fs::file_temp("registry", tmp_dir = reg$temp.dir)
   "!DEBUG [makeRegistry]: Creating directories in '`reg$file.dir`'"
-  for (d in fp(reg$file.dir, c("jobs", "results", "updates", "logs", "exports", "external")))
-    dir.create(d, recursive = TRUE)
-  reg$file.dir = npath(reg$file.dir)
 
+  fs::dir_create(c(reg$file.dir, reg$work.dir))
+  reg$file.dir = fs::path_abs(reg$file.dir)
+  reg$work.dir = fs::path_abs(reg$work.dir)
+
+  fs::dir_create(fs::path(reg$file.dir, c("jobs", "results", "updates", "logs", "exports", "external")))
   with_dir(reg$work.dir, loadRegistryDependencies(reg))
 
   class(reg) = "Registry"
   saveRegistry(reg)
-  reg$mtime = file.mtime(fp(reg$file.dir, "registry.rds"))
+  reg$mtime = file_mtime(fs::path(reg$file.dir, "registry.rds"))
+  reg$hash = rnd_hash()
   info("Created registry in '%s' using cluster functions '%s'", reg$file.dir, reg$cluster.functions$name)
   if (make.default)
     batchtools$default.registry = reg
@@ -193,8 +212,29 @@ print.Registry = function(x, ...) {
   catf("  Writeable: %s", x$writeable)
 }
 
-assertRegistry = function(reg, writeable = FALSE, sync = FALSE, strict = FALSE, running.ok = TRUE) {
-  assertClass(reg, "Registry", ordered = strict)
+#' @title assertRegistry
+#'
+#' @description
+#' Assert that a given object is a \code{batchtools} registry.
+#' Additionally can sync the registry, check if it is writeable, or check if jobs are running.
+#' If any check fails, throws an error indicting the reason for the failure.
+#'
+#' @param reg [\code{\link{Registry}}]\cr
+#'   The object asserted to be a \code{Registry}.
+#' @param class [\code{character(1)}]\cr
+#'   If \code{NULL} (default), \code{reg} must only inherit from class \dQuote{Registry}.
+#'   Otherwise check that \code{reg} is of class \code{class}.
+#'   E.g., if set to \dQuote{Registry}, a \code{\link{ExperimentRegistry}} would not pass.
+#' @param writeable [\code{logical(1)}]\cr
+#'   Check if the registry is writeable.
+#' @param sync [\code{logical(1)}]\cr
+#'   Try to synchronize the registry by including pending results from the file system.
+#'   See \code{\link{syncRegistry}}.
+#' @param running.ok [\code{logical(1)}]\cr
+#'   If \code{FALSE} throw an error if jobs associated with the registry are currently running.
+#' @return \code{TRUE} invisibly.
+#' @export
+assertRegistry = function(reg, class = NULL, writeable = FALSE, sync = FALSE, running.ok = TRUE) {
   if (batchtools$debug) {
     if (!identical(key(reg$status), "job.id"))
       stop("Key of reg$job.id lost")
@@ -204,22 +244,30 @@ assertRegistry = function(reg, writeable = FALSE, sync = FALSE, strict = FALSE, 
       stop("Key of reg$resources lost")
   }
 
+  if (is.null(class)) {
+    assertClass(reg, "Registry")
+  } else {
+    assertString(class)
+    assertClass(reg, class, ordered = TRUE)
+  }
+  assertFlag(writeable)
+  assertFlag(sync)
+  assertFlag(running.ok)
 
-  if (reg$writeable && !identical(reg$mtime, file.mtime(fp(reg$file.dir, "registry.rds")))) {
-    warning("Registry has been altered since last read. Switching to read-only mode in this session.")
+  if (reg$writeable && !identical(reg$mtime, file_mtime(fs::path(reg$file.dir, "registry.rds")))) {
+    warning("Registry has been altered since last read. Switching to read-only mode in this session. See ?loadRegistry.")
     reg$writeable = FALSE
   }
 
   if (writeable && !reg$writeable)
-    stop("Registry must be writeable")
-
-  if (sync || !running.ok) {
-    if (sync(reg))
-      saveRegistry(reg)
-  }
+    stop("Registry must be writeable. See ?loadRegistry.")
 
   if (!running.ok && nrow(.findOnSystem(reg = reg)) > 0L)
     stop("This operation is not allowed while jobs are running on the system")
+
+  if (sync && sync(reg))
+    saveRegistry(reg)
+
   invisible(TRUE)
 }
 
@@ -251,13 +299,13 @@ loadRegistryDependencies = function(x, must.work = FALSE) {
     }
   }
 
-  path = fp(x$file.dir, "exports")
+  path = fs::path(x$file.dir, "exports")
   fns = list.files(path, pattern = "\\.rds$")
   if (length(fns) > 0L) {
     ee = .GlobalEnv
     Map(function(name, fn) {
       assign(x = name, value = readRDS(fn), envir = ee)
-    }, name = unmangle(fns), fn = fp(path, fns))
+    }, name = unmangle(fns), fn = fs::path(path, fns))
   }
 
   invisible(TRUE)

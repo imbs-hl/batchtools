@@ -1,6 +1,6 @@
 # batchtools
 
-[![JOSS Publicatoin](http://joss.theoj.org/papers/10.21105/joss.00135/status.svg)](http://dx.doi.org/10.21105/joss.00135)
+[![JOSS Publicatoin](http://joss.theoj.org/papers/10.21105/joss.00135/status.svg)](https://doi.org/10.21105/joss.00135)
 [![CRAN Status Badge](http://www.r-pkg.org/badges/version/batchtools)](https://cran.r-project.org/package=batchtools)
 [![Build Status](https://travis-ci.org/mllg/batchtools.svg?branch=master)](https://travis-ci.org/mllg/batchtools)
 [![Build Status](https://ci.appveyor.com/api/projects/status/ypp14tiiqfhnv92k/branch/master?svg=true)](https://ci.appveyor.com/project/mllg/batchtools/branch/master)
@@ -25,11 +25,14 @@ For the development version, use [devtools](https://cran.r-project.org/package=d
 devtools::install_github("mllg/batchtools")
 ```
 
+Next, you need to setup `batchtools` for your HPC (it will run sequentially otherwise).
+See the [vignette](https://mllg.github.io/batchtools/articles/batchtools.html#setup) for instructions.
+
 ## Why batchtools?
 The development of [BatchJobs](https://github.com/tudo-r/BatchJobs/) and [BatchExperiments](https://github.com/tudo-r/Batchexperiments) is discontinued for the following reasons:
 
 * Maintainability: The packages [BatchJobs](https://github.com/tudo-r/BatchJobs/) and [BatchExperiments](https://github.com/tudo-r/Batchexperiments) are tightly connected which makes maintenance difficult. Changes have to be synchronized and tested against the current CRAN versions for compatibility. Furthermore, BatchExperiments violates CRAN policies by calling internal functions of BatchJobs.
-* Data base issues: Although we invested weeks to mitigate issues with locks of the SQLite data base or file system (staged queries, file system timeouts, ...), `BatchJobs` kept working unreliable on some systems with high latency or specific file systems. This made `BatchJobs` unusable for many users.
+* Data base issues: Although we invested weeks to mitigate issues with locks of the SQLite data base or file system (staged queries, file system timeouts, ...), `BatchJobs` kept working unreliable on some systems with high latency under certain conditions. This made `BatchJobs` unusable for many users.
 
 [BatchJobs](https://github.com/tudo-r/BatchJobs/) and [BatchExperiments](https://github.com/tudo-r/Batchexperiments) will remain on CRAN, but new features are unlikely to be ported back.
 The [vignette](https://mllg.github.io/batchtools/articles/batchtools.html#migration) contains a section comparing the packages.
@@ -39,11 +42,11 @@ The [vignette](https://mllg.github.io/batchtools/articles/batchtools.html#migrat
 * [NEWS](https://mllg.github.io/batchtools/news/)
 * [Function reference](https://mllg.github.io/batchtools/reference)
 * [Vignette](https://mllg.github.io/batchtools/articles/batchtools.html)
-* [JOSS Paper](http://dx.doi.org/10.21105/joss.00135): Short paper on batchtools. Please cite this if you use batchtools.
+* [JOSS Paper](https://doi.org/10.21105/joss.00135): Short paper on batchtools. Please cite this if you use batchtools.
 * [Paper on BatchJobs/BatchExperiments](http://www.jstatsoft.org/v64/i11): The described concept still holds for batchtools and most examples work analogously (see the [vignette](https://mllg.github.io/batchtools/articles/batchtools.html#migration) for differences between the packages).
 
 ## Citation
-Please cite the [JOSS paper](http://dx.doi.org/10.21105/joss.00135) using the following BibTeX entry:
+Please cite the [JOSS paper](https://doi.org/10.21105/joss.00135) using the following BibTeX entry:
 ```
 @article{,
   doi = {10.21105/joss.00135},
@@ -60,9 +63,12 @@ Please cite the [JOSS paper](http://dx.doi.org/10.21105/joss.00135) using the fo
 ```
 
 ## Related Software
-* The [High Performance Computing Task View](https://cran.r-project.org/view=HighPerformanceComputing) lists the most relevant packages for scientific computing with R
-* [batch](https://cran.r-project.org/package=batch) assists in splitting and submitting jobs to LSF and MOSIX clusters
-* [flowr](https://cran.r-project.org/package=flowr) supports LSF, Slurm, TORQUE and Moab and provides a scatter-gather approach to define computational jobs
+* The [High Performance Computing Task View](https://cran.r-project.org/view=HighPerformanceComputing) lists the most relevant packages for scientific computing with R.
+* [batch](https://cran.r-project.org/package=batch) assists in splitting and submitting jobs to LSF and MOSIX clusters.
+* [flowr](https://cran.r-project.org/package=flowr) supports LSF, Slurm, TORQUE and Moab and provides a scatter-gather approach to define computational jobs.
+* [future.batchtools](https://cran.r-project.org/package=future.batchtools) implements `batchtools` as backend for [future](https://cran.r-project.org/package=future.batchtools).
+* [doFuture](https://cran.r-project.org/package=doFuture) together with [future.batchtools](https://cran.r-project.org/package=future.batchtools) connects `batchtools` to [foreach](https://cran.r-project.org/package=foreach).
+* [drake](https://cran.r-project.org/package=drake) uses graphs to define computational jobs. `batchtools` is used as a backend via [future.batchtools](https://cran.r-project.org/package=future.batchtools).
 
 ## Contributing to batchtools
 This R package is licensed under the [LGPL-3](https://www.gnu.org/licenses/lgpl-3.0.en.html).

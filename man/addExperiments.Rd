@@ -50,6 +50,7 @@ Therefore, this function will warn about factor variables if the following condi
 }
 }
 \examples{
+\dontshow{ batchtools:::example_push_temp(1) }
 tmp = makeExperimentRegistry(file.dir = NA, make.default = FALSE)
 
 # add first problem
@@ -80,7 +81,7 @@ addExperiments(prob.designs, algo.designs, reg = tmp)
 
 # check what has been created
 summarizeExperiments(reg = tmp)
-getJobPars(reg = tmp)
+unwrap(getJobPars(reg = tmp))
 }
 \seealso{
 Other Experiment: \code{\link{removeExperiments}},

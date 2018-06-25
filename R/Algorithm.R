@@ -7,7 +7,7 @@
 #' This function serializes all components to the file system and registers the algorithm in the \code{\link{ExperimentRegistry}}.
 #'
 #' \code{removeAlgorithm} removes all jobs from the registry which depend on the specific algorithm.
-#' \code{getAlgorithmIds} can be used to retrieve the IDs of already algorithms.
+#' \code{reg$algorithms} holds the IDs of already defined algorithms.
 #'
 #' @param name [\code{character(1)}]\cr
 #'   Unique identifier for the algorithm.
@@ -20,20 +20,10 @@
 #' @template expreg
 #' @return [\code{Algorithm}]. Object of class \dQuote{Algorithm}.
 #' @aliases Algorithm
+#' @seealso \code{\link{Problem}}, \code{\link{addExperiments}}
 #' @export
-#' @examples
-#' tmp = makeExperimentRegistry(file.dir = NA, make.default = FALSE)
-#' addProblem("p1", fun = function(job, data) data, reg = tmp)
-#' addProblem("p2", fun = function(job, data) job, reg = tmp)
-#' getProblemIds(reg = tmp)
-#'
-#' addAlgorithm("a1", fun = function(job, data, instance) instance, reg = tmp)
-#' getAlgorithmIds(reg = tmp)
-#'
-#' removeAlgorithms("a1", reg = tmp)
-#' getAlgorithmIds(reg = tmp)
 addAlgorithm = function(name, fun = NULL, reg = getDefaultRegistry())  {
-  assertExperimentRegistry(reg, writeable = TRUE)
+  assertRegistry(reg, class = "ExperimentRegistry", writeable = TRUE)
   assertString(name, min.chars = 1L)
   if (!stri_detect_regex(name, "^[[:alnum:]_.-]+$"))
     stopf("Illegal characters in problem name: %s", name)
@@ -46,7 +36,7 @@ addAlgorithm = function(name, fun = NULL, reg = getDefaultRegistry())  {
   info("Adding algorithm '%s'", name)
   algo = setClasses(list(fun = fun, name = name), "Algorithm")
   writeRDS(algo, file = getAlgorithmURI(reg, name))
-  reg$defs$algorithm = addlevel(reg$defs$algorithm, name)
+  reg$algorithms = union(reg$algorithms, name)
   saveRegistry(reg)
   invisible(algo)
 }
@@ -54,9 +44,9 @@ addAlgorithm = function(name, fun = NULL, reg = getDefaultRegistry())  {
 #' @export
 #' @rdname addAlgorithm
 removeAlgorithms = function(name, reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg, writeable = TRUE, running.ok = FALSE)
+  assertRegistry(reg, class = "ExperimentRegistry", writeable = TRUE, running.ok = FALSE)
   assertCharacter(name, any.missing = FALSE)
-  assertSubset(name, levels(reg$defs$algorithm))
+  assertSubset(name, reg$algorithms)
 
   algorithm = NULL
   for (nn in name) {
@@ -64,19 +54,16 @@ removeAlgorithms = function(name, reg = getDefaultRegistry()) {
     job.ids = filter(def.ids, reg$status, "job.id")
 
     info("Removing Algorithm '%s' and %i corresponding jobs ...", nn, nrow(job.ids))
-    file.remove.safely(getAlgorithmURI(reg, nn))
+    file_remove(getAlgorithmURI(reg, nn))
     reg$defs = reg$defs[!def.ids]
     reg$status = reg$status[!job.ids]
-    reg$defs$algorithm = rmlevel(reg$defs$algorithm, nn)
+    reg$algorithms = chsetdiff(reg$algorithms, nn)
   }
 
   sweepRegistry(reg)
   invisible(TRUE)
 }
 
-#' @export
-#' @rdname addAlgorithm
-getAlgorithmIds = function(reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg)
-  levels(reg$defs$algorithm)
+getAlgorithmURI = function(reg, name) {
+  fs::path(dir(reg, "algorithms"), mangle(name))
 }

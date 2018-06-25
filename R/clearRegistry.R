@@ -6,15 +6,15 @@
 #' @family Registry
 #' @export
 clearRegistry = function(reg = getDefaultRegistry()) {
-  assertRegistry(reg, writeable = TRUE, running.ok = FALSE)
+  assertRegistry(reg, writeable = TRUE, sync = TRUE, running.ok = FALSE)
   info("Removing %i jobs ...", nrow(reg$status))
   reg$status = reg$status[FALSE]
   reg$defs = reg$defs[FALSE]
   reg$resources = reg$resources[FALSE]
-  user.fun = fp(reg$file.dir, "user.function.rds")
-  if (file.exists(user.fun)) {
+  user.fun = fs::path(reg$file.dir, "user.function.rds")
+  if (fs::file_exists(user.fun)) {
     info("Removing user function ...")
-    file.remove.safely(user.fun)
+    file_remove(user.fun)
   }
   sweepRegistry(reg = reg)
 }

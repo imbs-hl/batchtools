@@ -1,13 +1,13 @@
 #' @title Map Operation for Batch Systems
 #'
 #' @description
-#' A parallel and asynchronous \code{\link[base]{Map}} for batch systems.
+#' A parallel and asynchronous \code{\link[base]{Map}}/\code{\link[base]{mapply}} for batch systems.
 #' Note that this function only defines the computational jobs.
 #' The actual computation is started with \code{\link{submitJobs}}.
 #' Results and partial results can be collected with \code{\link{reduceResultsList}}, \code{\link{reduceResults}} or
 #' \code{\link{loadResult}}.
 #'
-#' For a synchronous \code{\link[base]{Map}}-like execution see \code{\link{btmapply}}.
+#' For a synchronous \code{\link[base]{Map}}-like execution, see \code{\link{btmapply}}.
 #'
 #' @param fun [\code{function}]\cr
 #'   Function to map over arguments provided via \code{...}.
@@ -30,6 +30,7 @@
 #' @export
 #' @seealso \code{\link{batchReduce}}
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(3) }
 #' # example using "..." and more.args
 #' tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 #' f = function(x, y) x^2 + y
@@ -56,7 +57,7 @@ batchMap = function(fun, ..., args = list(), more.args = list(), reg = getDefaul
     as.data.table(x)
   }
 
-  assertRegistry(reg, writeable = TRUE, strict = TRUE)
+  assertRegistry(reg, class = "Registry", writeable = TRUE)
   if (nrow(reg$defs) > 0L)
     stop("Registry must be empty")
   assertFunction(fun)
@@ -64,7 +65,7 @@ batchMap = function(fun, ..., args = list(), more.args = list(), reg = getDefaul
   assertList(more.args, names = "strict")
 
   if (length(args) > 0L) {
-    if (length(list(...)) > 0L)
+    if (...length() > 0L)
       stop("You may only provide arguments via '...' *or* 'args'")
     ddd = list2dt(args)
   } else {
@@ -78,15 +79,15 @@ batchMap = function(fun, ..., args = list(), more.args = list(), reg = getDefaul
     return(noIds())
   info("Adding %i jobs ...", nrow(ddd))
 
-  writeRDS(fun, file = fp(reg$file.dir, "user.function.rds"))
+  writeRDS(fun, file = fs::path(reg$file.dir, "user.function.rds"))
   if (length(more.args) > 0L)
-    writeRDS(more.args, file = fp(reg$file.dir, "more.args.rds"))
+    writeRDS(more.args, file = fs::path(reg$file.dir, "more.args.rds"))
   ids = seq_row(ddd)
 
   reg$defs = data.table(
-    def.id = ids,
-    pars   = .mapply(list, dots = ddd, MoreArgs = list()),
-    key    = "def.id")
+    def.id   = ids,
+    job.pars = .mapply(list, dots = ddd, MoreArgs = list()),
+    key      = "def.id")
 
   reg$status = data.table(
     job.id      = ids,
@@ -95,7 +96,7 @@ batchMap = function(fun, ..., args = list(), more.args = list(), reg = getDefaul
     started     = NA_real_,
     done        = NA_real_,
     error       = NA_character_,
-    memory      = NA_real_,
+    mem.used    = NA_real_,
     resource.id = NA_integer_,
     batch.id    = NA_character_,
     log.file    = NA_character_,

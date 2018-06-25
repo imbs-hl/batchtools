@@ -1,6 +1,48 @@
+# batchtools 0.9.11
+
+* Removed deprecated function `chunkIds()`.
+* New default for argument `fs.timeout` in the cluster function constructor is `0` (was `NA` before).
+
+# batchtools 0.9.10
+
+* Exported functions `findConfFile()` and `findTemplateFile()`.
+* Dropped support for providing a template file directly as string. A valid file is now always required.
+* Fixed writing to `TMPDIR` instead of the R session's temporary directory.
+
+# batchtools 0.9.9
+
+* RDS files are explicitly stored in version 2 to ensure backward compatibility with R versions prior to 3.5.0.
+* Package `fs` is now used internally for all file system operations.
+* Support for per-site configuration files and templates to be set up by system administrators.
+* The print of `getStatus()` now includes a time stamp.
+* `chunk()` now optionally shuffles the ids before chunking.
+* Support for setting per-job resources in `submitJobs()`.
+* Example templates now include resources for `blas.threads` and `omp.threads`.
+* Some bug fixes regarding read-only registries.
+
+# batchtools 0.9.8
+
+* Renamed column "memory" in the status table to "mem.used" to avoid name clashes with the resource specification.
+* Exported function `assertRegistry()`.
+* New function `unwrap()` as alias to `flatten()`.
+  The latter causes a name clash with package `purrr` and will be deprecated in a future version.
+* Registries now contain a unique hash which is updated each time the registry is altered.
+  Can be utilized to invalidate caches, e.g. the cache of knitr.
+
 # batchtools 0.9.7
 
 * Added a workaround for a test to be compatible with testthat v2.0.0.
+* Better and more customizable handling of expired jobs in `waitForJobs()`.
+* Package `foreach` is now supported for nested parallelization as an alternative to `parallelMap`.
+* Depreciated argument flatten has been removed.
+* New helper function `flatten()` to manually unnest/unwrap lists in data frames.
+* Removed functions `getProblemIds()` and `getAlgorithmIds()`.
+  Instead, you can just access `reg$problems` or `reg$algorithms`, respectively.
+* The number of the maximum concurrent jobs can now also be controlled via setting resources.
+* Internal data base changes to speed up some operations.
+  Old registries are updated on first load by `loadRegistry()`.
+* Fixed a bug where the sleep mechanism between queries was not working.
+* Fixed a bug where submit errors on SLURM and TORQUE were not detected as temporary.
 
 # batchtools 0.9.6
 

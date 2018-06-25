@@ -1,7 +1,7 @@
 context("waitForJobs")
 
 test_that("waitForJobs", {
-  reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestRegistry()
   fun = function(x) if (x == 2) stop(x) else x
   ids = batchMap(reg = reg, fun, 1:2)
   silent({
@@ -12,21 +12,22 @@ test_that("waitForJobs", {
 })
 
 test_that("waitForJobs: detection of expired jobs", {
-  reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestRegistry()
   if (is.null(reg$cluster.functions$killJob))
     skip("Test requires killJobs")
-
   ids = batchMap(reg = reg, Sys.sleep, c(20, 20))
+  ids$chunk = 1L
+
   silent({
     submitJobs(ids, reg = reg)
     batch.ids = reg$status$batch.id
     reg$cluster.functions$killJob(reg, batch.ids[1])
-    expect_warning(waitForJobs(ids, reg = reg, sleep = 1), "disappeared")
+    expect_warning(waitForJobs(ids, reg = reg, sleep = 1, stop.on.expire = TRUE), "disappeared")
   })
 })
 
 test_that("waitForJobs: filter out unsubmitted jobs", {
-  reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestRegistry()
   ids = batchMap(identity, 1:2, reg = reg)
   silent({
     submitJobs(ids = 1, reg = reg)

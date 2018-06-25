@@ -37,15 +37,16 @@ Registry. If not explicitly passed, uses the default registry (see \code{\link{s
 [\code{\link{data.table}}] with ids of added jobs stored in column \dQuote{job.id}.
 }
 \description{
-A parallel and asynchronous \code{\link[base]{Map}} for batch systems.
+A parallel and asynchronous \code{\link[base]{Map}}/\code{\link[base]{mapply}} for batch systems.
 Note that this function only defines the computational jobs.
 The actual computation is started with \code{\link{submitJobs}}.
 Results and partial results can be collected with \code{\link{reduceResultsList}}, \code{\link{reduceResults}} or
 \code{\link{loadResult}}.
 
-For a synchronous \code{\link[base]{Map}}-like execution see \code{\link{btmapply}}.
+For a synchronous \code{\link[base]{Map}}-like execution, see \code{\link{btmapply}}.
 }
 \examples{
+\dontshow{ batchtools:::example_push_temp(3) }
 # example using "..." and more.args
 tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 f = function(x, y) x^2 + y

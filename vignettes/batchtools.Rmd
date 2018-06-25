@@ -13,7 +13,13 @@ vignette: >
 
 ```{r,include = FALSE, cache = FALSE}
 library(batchtools)
-options(batchtools.progress = FALSE, datatable.print.class = TRUE)
+options(batchtools.progress = FALSE, datatable.print.class = TRUE, batchtools.timestamps = FALSE)
+if (identical(Sys.getenv("IN_PKGDOWN"), "true")) {
+  tmp_dir = fs::path(dirname(tempdir()), "batchtools-vignette")
+  if (fs::dir_exists(tmp_dir))
+    fs::dir_delete(tmp_dir)
+  fs::file_temp_push(fs::path(tmp_dir, letters))
+}
 ```
 
 # Setup
@@ -199,6 +205,7 @@ piApprox = function(n) {
   d = sqrt(nums[, 1]^2 + nums[, 2]^2)
   4 * mean(d <= 1)
 }
+set.seed(42)
 piApprox(1000)
 ```
 We now parallelize `piApprox()` with `batchtools`: We create 10 jobs, each doing a MC simulation with $10^5$ jobs.
@@ -318,10 +325,10 @@ Note that using the `...` argument in the wrapper definitions allows us to circu
 This is an advantage if we later want to extend the set of algorithm parameters in the experiment.
 The algorithms get recorded in the registry and the corresponding functions are stored on the file system.
 
-Defined problems and algorithms can be queried:
+Defined problems and algorithms can be queried with:
 ```{r}
-getProblemIds()
-getAlgorithmIds()
+reg$problems
+reg$algorithms
 ```
 The flow to define experiments is summarized in the following figure:
 
@@ -393,13 +400,14 @@ waitForJobs()
 After jobs are finished, the results can be collected with [`reduceResultsDataTable()`](https://mllg.github.io/batchtools/reference/reduceResultsList) where we directly extract the mean misclassification error:
 ```{r}
 reduce = function(res) list(mce = (sum(res) - sum(diag(res))) / sum(res))
-results = reduceResultsDataTable(fun = reduce)
+results = unwrap(reduceResultsDataTable(fun = reduce))
 head(results)
 ```
 
 Next, we merge the results table with the table of job parameters using one of the [join helpers](https://mllg.github.io/batchtools/reference/JoinTables) provided by `batchtools` (here, we use an inner join):
 ```{r}
-tab = ijoin(getJobPars(), results)
+pars = unwrap(getJobPars())
+tab = ijoin(pars, results)
 head(tab)
 ```
 
@@ -500,15 +508,15 @@ knitr::include_graphics("function_overview.png", auto_pdf = TRUE)
 Most users develop and prototype their experiments on a desktop box in their preferred IDE and later deploy to a large computing cluster.
 This can be done by prototyping locally ([`testJob()`](https://mllg.github.io/batchtools/reference/testJob) or submit subsets via [`submitJobs()`](https://mllg.github.io/batchtools/reference/submitJobs)).
 To deploy to the cluster, just copy the file directory (as reported by `reg$file.dir`) to the remote system.
-Next, log in on the cluster (typically via `ssh`), `cd` to the copied directory and call `loadRegistry("<file.dir.on.remote">, "<work.dir.on.remote>")`.
+Next, log in on the cluster (typically via `ssh`), `cd` to the copied directory and call `loadRegistry("<file.dir.on.remote">, "<work.dir.on.remote>", writeable = TRUE)`.
 This function will (a) source the local configuration file so that you can talk to the cluster (verify by checking the output of `reg$cluster.functions`) and (b) adjust the paths to the new system if argument `update.paths` is set.
 After loading the Registry, it is advised to test some jobs again with [`testJob()`](https://mllg.github.io/batchtools/reference/testJob) before submitting all of them with `submitJobs(resources = list())` (remember you now need to set resources!).
 After some jobs are finished, the `file.dir` can be copied back (do not merge with the previous directory!) and loaded again with [`loadRegistry()`](https://mllg.github.io/batchtools/reference/loadRegistry).
 
 This approach is totally viable as long as some general rules are followed:
 
-1. Make sure you have all packages installed. Package versions can be synchronized with [`checkpoint`](https://cran.r-project.org/package=checkpoint) or [`packrat`](https://cran.r-project.org/package=packrat).
-2. Test jobs on the remote system before submitting to ensure that paths are resolved correctly.
+1. Make sure you have all packages installed. Package versions can be synchronized across machines with [`checkpoint`](https://cran.r-project.org/package=checkpoint) or [`packrat`](https://cran.r-project.org/package=packrat).
+2. Test jobs on the remote system prior to submit to ensure that paths are resolved correctly.
 3. Make sure you have set the cluster functions in a configuration file, and stick to one backend as long as jobs are running.
 4. The status can only be monitored on the remote system (for obvious reasons).
 5. Partial results can be inspected both on the remote system and on the local system.
@@ -516,6 +524,7 @@ This approach is totally viable as long as some general rules are followed:
    Overwriting/merging directories is not advised as this may lead to inconsistencies if you added or removed experiments on the remote.
    If you have to merge, use `rsync` with option `--delete`.
    Load the registry locally with [`loadRegistry()`](https://mllg.github.io/batchtools/reference/loadRegistry) and collect results. Do not copy back and forth.
-6. Never access the `file.dir` with multiple sessions simultaneously.
-   Also never mount the file dir to work with it in a local R session.
-   This may lead to inconsistencies and missing results.
+6. Avoid accessing the `file.dir` with multiple sessions simultaneously.
+   This includes accessing the registry via a mount!
+   Simultaneous access may lead to inconsistencies and missing results.
+

@@ -11,7 +11,7 @@
 #' This function serialize all components to the file system and registers the problem in the \code{\link{ExperimentRegistry}}.
 #'
 #' \code{removeProblem} removes all jobs from the registry which depend on the specific problem.
-#' \code{getProblemIds} can be used to retrieve the IDs of already defined problems.
+#' \code{reg$problems} holds the IDs of already defined problems.
 #'
 #' @param name [\code{character(1)}]\cr
 #'   Unique identifier for the problem.
@@ -34,23 +34,38 @@
 #'   see \code{\link{ExperimentRegistry}}.
 #'   If \code{seed} is set to \code{NULL} (default), the job seed is used to instantiate the problem and
 #'   different algorithms see different stochastic instances of the same problem.
+#' @param cache [\code{logical(1)}]\cr
+#'   If \code{TRUE} and \code{seed} is set, problem instances will be cached on the file system.
+#'   This assumes that each problem instance is deterministic for each combination of hyperparameter setting
+#'   and each replication number.
+#'   This feature is experimental.
 #' @template expreg
 #' @return [\code{Problem}]. Object of class \dQuote{Problem} (invisibly).
 #' @aliases Problem
+#' @seealso \code{\link{Algorithm}}, \code{\link{addExperiments}}
 #' @export
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(1) }
 #' tmp = makeExperimentRegistry(file.dir = NA, make.default = FALSE)
 #' addProblem("p1", fun = function(job, data) data, reg = tmp)
 #' addProblem("p2", fun = function(job, data) job, reg = tmp)
-#' getProblemIds(reg = tmp)
-#'
 #' addAlgorithm("a1", fun = function(job, data, instance) instance, reg = tmp)
-#' getAlgorithmIds(reg = tmp)
+#' addExperiments(repls = 2, reg = tmp)
 #'
-#' removeAlgorithms("a1", reg = tmp)
-#' getAlgorithmIds(reg = tmp)
-addProblem = function(name, data = NULL, fun = NULL, seed = NULL, reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg, writeable = TRUE)
+#' # List problems, algorithms and job parameters:
+#' tmp$problems
+#' tmp$algorithms
+#' getJobPars(reg = tmp)
+#'
+#' # Remove one problem
+#' removeProblems("p1", reg = tmp)
+#'
+#' # List problems and algorithms:
+#' tmp$problems
+#' tmp$algorithms
+#' getJobPars(reg = tmp)
+addProblem = function(name, data = NULL, fun = NULL, seed = NULL, cache = FALSE, reg = getDefaultRegistry()) {
+  assertRegistry(reg, class = "ExperimentRegistry", writeable = TRUE)
   assertString(name, min.chars = 1L)
   if (!stri_detect_regex(name, "^[[:alnum:]_.-]+$"))
     stopf("Illegal characters in problem name: %s", name)
@@ -59,14 +74,22 @@ addProblem = function(name, data = NULL, fun = NULL, seed = NULL, reg = getDefau
   } else {
     assert(checkFunction(fun, args = c("job", "data")), checkFunction(fun, args = "..."))
   }
-  if (!is.null(seed)) {
+  if (is.null(seed)) {
+    cache = FALSE
+  } else {
     seed = asCount(seed, positive = TRUE)
+    cache = assertFlag(cache)
   }
 
   info("Adding problem '%s'", name)
-  prob = setClasses(list(name = name, seed = seed, data = data, fun = fun), "Problem")
+  prob = setClasses(list(name = name, seed = seed, cache = cache, data = data, fun = fun), "Problem")
   writeRDS(prob, file = getProblemURI(reg, name))
-  reg$defs$problem = addlevel(reg$defs$problem, name)
+  reg$problems = union(reg$problems, name)
+  cache.dir = getProblemCacheDir(reg, name)
+  if (fs::dir_exists(cache.dir))
+    fs::dir_delete(cache.dir)
+  if (cache)
+    fs::dir_create(cache.dir)
   saveRegistry(reg)
   invisible(prob)
 }
@@ -74,9 +97,9 @@ addProblem = function(name, data = NULL, fun = NULL, seed = NULL, reg = getDefau
 #' @export
 #' @rdname addProblem
 removeProblems = function(name, reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg, writeable = TRUE, running.ok = FALSE)
+  assertRegistry(reg, class = "ExperimentRegistry", writeable = TRUE, running.ok = FALSE)
   assertCharacter(name, any.missing = FALSE)
-  assertSubset(name, levels(reg$defs$problem))
+  assertSubset(name, reg$problems)
 
   problem = NULL
   for (nn in name) {
@@ -84,19 +107,27 @@ removeProblems = function(name, reg = getDefaultRegistry()) {
     job.ids = filter(def.ids, reg$status, "job.id")
 
     info("Removing Problem '%s' and %i corresponding jobs ...", nn, nrow(job.ids))
-    file.remove.safely(getProblemURI(reg, nn))
+    file_remove(getProblemURI(reg, nn))
     reg$defs = reg$defs[!def.ids]
     reg$status = reg$status[!job.ids]
-    reg$defs$problem = rmlevel(reg$defs$problem, nn)
+    reg$problems = chsetdiff(reg$problems, nn)
+    cache = getProblemCacheDir(reg, nn)
+    if (fs::dir_exists(cache))
+      fs::dir_delete(cache)
   }
 
   sweepRegistry(reg)
   invisible(TRUE)
 }
 
-#' @export
-#' @rdname addProblem
-getProblemIds = function(reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg)
-  levels(reg$defs$problem)
+getProblemURI = function(reg, name) {
+  fs::path(dir(reg, "problems"), mangle(name))
+}
+
+getProblemCacheDir = function(reg, name) {
+  fs::path(dir(reg, "cache"), "problems", base32_encode(name, use.padding = FALSE))
+}
+
+getProblemCacheURI = function(job) {
+  fs::path(getProblemCacheDir(job, job$prob.name), sprintf("%s.rds", digest(list(job$prob.name, job$prob.pars, job$repl))))
 }

@@ -7,18 +7,20 @@ test_that("clusterFunctions constructor", {
         "store.job.collection", "store.job.files", "array.var", "scheduler.latency", "fs.latency", "hooks"))
     expect_output(print(cf), "ClusterFunctions for mode")
   }
-  reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestRegistry()
   check(reg$cluster.functions)
+  fn = fs::path(fs::path_temp(), "dummy.tmpl")
+  writeLines("foo", fn)
   check(makeClusterFunctionsInteractive())
-  check(makeClusterFunctionsSGE(template = "foo\n"))
-  check(makeClusterFunctionsTORQUE(template = "foo\n"))
-  check(makeClusterFunctionsSlurm(template = "foo\n"))
-  check(makeClusterFunctionsOpenLava(template = "foo\n"))
-  check(makeClusterFunctionsLSF(template = "foo\n"))
+  check(makeClusterFunctionsSGE(template = fn))
+  check(makeClusterFunctionsTORQUE(template = fn))
+  check(makeClusterFunctionsSlurm(template = fn))
+  check(makeClusterFunctionsOpenLava(template = fn))
+  check(makeClusterFunctionsLSF(template = fn))
   check(makeClusterFunctionsTORQUE("torque-lido"))
   check(makeClusterFunctionsSlurm("slurm-dortmund"))
   check(makeClusterFunctionsDocker("image"))
-  expect_error(makeClusterFunctionsLSF(), "point to a template file")
+  expect_error(makeClusterFunctionsLSF(), "point to a readable template file")
 
   skip_on_os(c("windows", "solaris")) # system2 is broken on solaris
     check(makeClusterFunctionsSSH(workers = list(Worker$new(nodename = "localhost", ncpus = 1L))))
@@ -48,7 +50,7 @@ test_that("submitJobResult", {
 })
 
 test_that("brew", {
-  fn = tempfile()
+  fn = fs::file_temp()
   lines = c("####", " ", "!!!", "foo=<%= job.hash %>")
   writeLines(lines, fn)
 
@@ -60,7 +62,7 @@ test_that("brew", {
   assertCharacter(res, len = 2)
   expect_equal(sum(stri_detect_fixed(res, "job.hash")), 1)
 
-  reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestRegistry()
   ids = batchMap(identity, 1:2, reg = reg)
   jc = makeJobCollection(1, reg = reg)
   text = cfReadBrewTemplate(fn, comment.string = "###")
@@ -69,23 +71,25 @@ test_that("brew", {
   brewed = readLines(fn)
   expect_equal(brewed[1], "!!!")
   expect_equal(brewed[2], sprintf("foo=%s", jc$job.hash))
+  fs::file_delete(fn)
 })
 
 test_that("Special chars in directory names", {
-  reg = makeRegistry(NA, make.default = FALSE)
-  base.dir = tempfile(pattern = "test", tmpdir = dirname(reg$file.dir))
-  dir.create(base.dir, recursive = TRUE)
+  reg = makeTestRegistry()
+  base.dir = fs::file_temp(pattern = "test", tmp_dir = fs::path_dir(reg$file.dir))
+  fs::dir_create(base.dir)
 
-  file.dir = fp(base.dir, "test#some_frequently-used chars")
-  reg = makeRegistry(file.dir, make.default = FALSE)
+  file.dir = fs::path(base.dir, "test#some_frequently-used chars")
+  reg = makeTestRegistry(file.dir = file.dir)
   batchMap(identity, 1:2, reg = reg)
   submitAndWait(reg = reg)
+  Sys.sleep(0.2)
   expect_equal(reduceResultsList(reg = reg), list(1L, 2L))
-  expect_equal(testJob(1, external = TRUE, reg = reg), 1L)
+  expect_equal(testJob(1, external = FALSE, reg = reg), 1L)
 })
 
 test_that("Export of environment variable DEBUGME", {
-  reg = makeRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestRegistry()
   if (reg$cluster.functions$name == "Socket")
     skip("Environment variables not exported for CF socket")
   batchMap(function(i) Sys.getenv("DEBUGME"), i = 1, reg = reg)
@@ -95,4 +99,14 @@ test_that("Export of environment variable DEBUGME", {
 
   res = loadResult(1, reg = reg)
   expect_string(res, min.chars = 1, fixed = "grepme")
+})
+
+test_that("findTemplateFile", {
+  d = fs::path_temp()
+  fn = fs::path(d, "batchtools.slurm.tmpl")
+  fs::file_create(fn)
+  withr::with_envvar(list(R_BATCHTOOLS_SEARCH_PATH = d),
+    expect_equal(findTemplateFile("slurm"), fs::path_abs(fn))
+  )
+  fs::file_delete(fn)
 })

@@ -24,6 +24,10 @@ test_that("chunk", {
 
   expect_equal(chunk(numeric(0), chunk.size = 1), integer(0))
   expect_equal(chunk(numeric(0), n.chunks = 1), integer(0))
+  
+  x = 1:10; n.chunks = 2
+  res = c(rep(1, 5), rep(2, 5))
+  expect_equal(chunk(x, n.chunks = n.chunks, shuffle = FALSE), res)
 })
 
 test_that("binpack", {
@@ -76,7 +80,7 @@ test_that("lpt", {
 })
 
 test_that("caching works", {
-  reg = makeExperimentRegistry(file.dir = NA, make.default = FALSE)
+  reg = makeTestExperimentRegistry()
   p1 = addProblem(reg = reg, "p1", data = iris)
   p2 = addProblem(reg = reg, "p2", data = data.frame(a = 1:10))
   a1 = addAlgorithm(reg = reg, name = "a1", fun = function(data, ...) nrow(data))
@@ -85,7 +89,7 @@ test_that("caching works", {
   addExperiments(reg = reg)
   ids = findJobs(reg = reg)
   ids$chunk = 1L
-  submitJobs(ids, reg = reg)
+  submitAndWait(reg, ids)
 
   expect_identical(unlist(reduceResultsList(ids, reg = reg)), as.integer(c(150, 300, 10, 20)))
 })

@@ -45,6 +45,7 @@ You may also pass \code{n} here to determine the number of parallel jobs which i
 in a simple Longest Processing Time (LPT) algorithm to give an estimate for the parallel runtime.
 }
 \examples{
+\dontshow{ batchtools:::example_push_temp(1) }
 # Create a simple toy registry
 set.seed(1)
 tmp = makeExperimentRegistry(file.dir = NA, make.default = FALSE, seed = 1)
@@ -55,7 +56,7 @@ addExperiments(algo.designs = list(nrow = CJ(x = 1:50, y = letters[1:5])), reg =
 addExperiments(algo.designs = list(ncol = CJ(x = 1:50, y = letters[1:5])), reg = tmp)
 
 # We use the job parameters to predict runtimes
-tab = getJobPars(reg = tmp)
+tab = unwrap(getJobPars(reg = tmp))
 
 # First we need to submit some jobs so that the forest can train on some data.
 # Thus, we just sample some jobs from the registry while grouping by factor variables.

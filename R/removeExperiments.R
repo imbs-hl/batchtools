@@ -13,7 +13,7 @@
 #' @export
 #' @family Experiment
 removeExperiments = function(ids = NULL, reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg, writeable = TRUE, running.ok = FALSE)
+  assertRegistry(reg, class = "ExperimentRegistry", writeable = TRUE, running.ok = FALSE)
   ids = convertIds(reg, ids, default = noIds())
 
   info("Removing %i Experiments ...", nrow(ids))
@@ -24,7 +24,7 @@ removeExperiments = function(ids = NULL, reg = getDefaultRegistry()) {
     reg$defs = reg$defs[-i]
   }
   fns = getResultFiles(reg, ids)
-  file.remove.safely(fns)
+  file_remove(fns)
 
   sweepRegistry(reg)
   invisible(ids)

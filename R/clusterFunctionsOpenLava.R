@@ -1,7 +1,7 @@
 #' @title ClusterFunctions for OpenLava
 #'
 #' @description
-#' Cluster functions for OpenLava (\url{http://www.openlava.org/}).
+#' Cluster functions for OpenLava.
 #'
 #' Job files are created based on the brew template \code{template}. This
 #' file is processed with brew and then submitted to the queue using the
@@ -18,7 +18,6 @@
 #' @note
 #' Array jobs are currently not supported.
 #'
-#' @templateVar cf.name openlava
 #' @template template
 #' @inheritParams makeClusterFunctions
 #' @return [\code{\link{ClusterFunctions}}].
@@ -26,6 +25,8 @@
 #' @export
 makeClusterFunctionsOpenLava = function(template = "openlava", scheduler.latency = 1, fs.latency = 65) { # nocov start
   template = findTemplateFile(template)
+  if (testScalarNA(template))
+    stopf("Argument 'template' (=\"%s\") must point to a readable template file", template)
   template = cfReadBrewTemplate(template)
 
   # When LSB_BJOBS_CONSISTENT_EXIT_CODE = Y, the bjobs command exits with 0 only

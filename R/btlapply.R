@@ -30,12 +30,13 @@
 #' @return [\code{list}] List with the results of the function call.
 #' @export
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(1) }
 #' btlapply(1:3, function(x) x^2)
 #' btmapply(function(x, y, z) x + y + z, x = 1:3, y = 1:3, more.args = list(z = 1), simplify = TRUE)
 btlapply = function(X, fun, ..., resources = list(), n.chunks = NULL, chunk.size = NULL, reg = makeRegistry(file.dir = NA)) {
   assertVector(X)
   assertFunction(fun)
-  assertRegistry(reg, writeable = TRUE, strict = TRUE)
+  assertRegistry(reg, class = "Registry", writeable = TRUE)
 
   ids = batchMap(fun, X, more.args = list(...), reg = reg)
   if (!is.null(n.chunks) || !is.null(chunk.size))
@@ -55,7 +56,7 @@ btmapply = function(fun, ..., more.args = list(), simplify = FALSE, use.names = 
   assertFunction(fun)
   assertFlag(simplify)
   assertFlag(use.names)
-  assertRegistry(reg, writeable = TRUE, strict = TRUE)
+  assertRegistry(reg, class = "Registry", writeable = TRUE)
 
   ids = batchMap(fun, ..., more.args = more.args, reg = reg)
   if (!is.null(n.chunks) || !is.null(chunk.size))

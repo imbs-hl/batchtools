@@ -31,6 +31,7 @@
 #' @family Results
 #' @export
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(1) }
 #' tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 #' batchMap(function(a, b) list(sum = a+b, prod = a*b), a = 1:3, b = 1:3, reg = tmp)
 #' submitJobs(reg = tmp)
@@ -132,6 +133,7 @@ reduceResults = function(fun, ids = NULL, init, ..., reg = getDefaultRegistry())
 #' @family Results
 #' @export
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(2) }
 #' ### Example 1 - reduceResultsList
 #' tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 #' batchMap(function(x) x^2, x = 1:10, reg = tmp)
@@ -169,11 +171,12 @@ reduceResults = function(fun, ids = NULL, init, ..., reg = getDefaultRegistry())
 #' addExperiments(prob.designs, algo.designs, reg = tmp)
 #' submitJobs(reg = tmp)
 #'
-#' # collect results and join them # with problem and algorithm paramters
-#' ijoin(
+#' # collect results and join them with problem and algorithm paramters
+#' res = ijoin(
 #'   getJobPars(reg = tmp),
 #'   reduceResultsDataTable(reg = tmp, fun = function(x) list(res = x))
 #' )
+#' unwrap(res, sep = ".")
 reduceResultsList = function(ids = NULL, fun = NULL, ..., missing.val, reg = getDefaultRegistry()) {
   assertRegistry(reg, sync = TRUE)
   assertFunction(fun, null.ok = TRUE)
@@ -181,44 +184,28 @@ reduceResultsList = function(ids = NULL, fun = NULL, ..., missing.val, reg = get
   .reduceResultsList(ids, fun, ..., missing.val = missing.val, reg = reg)
 }
 
-#' @param flatten [\code{logical(1)}]\cr
-#'   Transform results into separate \code{\link[data.table]{data.table}} columns.
-#'   Defaults to \code{TRUE} if all results are (a list of) scalar atomics,
-#'   Otherwise each row of the column will hold a named list.
 #' @export
 #' @rdname reduceResultsList
-reduceResultsDataTable = function(ids = NULL, fun = NULL, ..., flatten = NULL, missing.val, reg = getDefaultRegistry()) {
+reduceResultsDataTable = function(ids = NULL, fun = NULL, ..., missing.val, reg = getDefaultRegistry()) {
   assertRegistry(reg, sync = TRUE)
   ids = convertIds(reg, ids, default = .findDone(reg = reg))
   assertFunction(fun, null.ok = TRUE)
-  assertFlag(flatten, null.ok = TRUE)
 
   results = .reduceResultsList(ids = ids, fun = fun, ..., missing.val = missing.val, reg = reg)
   if (length(results) == 0L)
     return(noIds())
-
-  if (flatten %??% qtestr(results, c("v1", "L"), depth = 2L)) {
-    if (!qtestr(results, "d"))
-      results = lapply(results, as.data.table)
-    results = rbindlist(results, fill = TRUE, idcol = "job.id")
-    if (!identical(results$job.id, seq_row(ids)))
-      stop("The function must return an object for each job which is convertible to a data.frame with one row")
-    results[, "job.id" := ids$job.id]
-    setkeyv(results, "job.id")[]
-  } else {
-    ids[, "result" := results][]
-  }
+  ids[, "result" := results][]
 }
 
 .reduceResultsList = function(ids, fun = NULL, ..., missing.val, reg = getDefaultRegistry()) {
   if (is.null(fun)) {
-    worker = function(..res, ..job, ...) ..res
+    worker = function(.res, .job, ...) .res
   } else {
     fun = match.fun(fun)
     if ("job" %chin% names(formals(fun)))
-      worker = function(..res, ..job, ...) fun(..res, job = ..job, ...)
+      worker = function(.res, .job, ...) fun(.res, job = .job, ...)
     else
-      worker = function(..res, ..job, ...) fun(..res, ...)
+      worker = function(.res, .job, ...) fun(.res, ...)
   }
 
   results = vector("list", nrow(ids))

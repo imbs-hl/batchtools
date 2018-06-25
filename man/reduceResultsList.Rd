@@ -8,8 +8,8 @@
 reduceResultsList(ids = NULL, fun = NULL, ..., missing.val,
   reg = getDefaultRegistry())
 
-reduceResultsDataTable(ids = NULL, fun = NULL, ..., flatten = NULL,
-  missing.val, reg = getDefaultRegistry())
+reduceResultsDataTable(ids = NULL, fun = NULL, ..., missing.val,
+  reg = getDefaultRegistry())
 }
 \arguments{
 \item{ids}{[\code{\link[base]{data.frame}} or \code{integer}]\cr
@@ -32,11 +32,6 @@ If not provided and a result is missing, an exception is raised.}
 
 \item{reg}{[\code{\link{Registry}}]\cr
 Registry. If not explicitly passed, uses the default registry (see \code{\link{setDefaultRegistry}}).}
-
-\item{flatten}{[\code{logical(1)}]\cr
-Transform results into separate \code{\link[data.table]{data.table}} columns.
-Defaults to \code{TRUE} if all results are (a list of) scalar atomics,
-Otherwise each row of the column will hold a named list.}
 }
 \value{
 \code{reduceResultsList} returns a list of the results in the same order as the provided ids.
@@ -56,6 +51,7 @@ If you have thousands of jobs, disabling the progress bar (\code{options(batchto
 can significantly increase the performance.
 }
 \examples{
+\dontshow{ batchtools:::example_push_temp(2) }
 ### Example 1 - reduceResultsList
 tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 batchMap(function(x) x^2, x = 1:10, reg = tmp)
@@ -93,11 +89,12 @@ algo.designs$deviation = data.table()
 addExperiments(prob.designs, algo.designs, reg = tmp)
 submitJobs(reg = tmp)
 
-# collect results and join them # with problem and algorithm paramters
-ijoin(
+# collect results and join them with problem and algorithm paramters
+res = ijoin(
   getJobPars(reg = tmp),
   reduceResultsDataTable(reg = tmp, fun = function(x) list(res = x))
 )
+unwrap(res, sep = ".")
 }
 \seealso{
 \code{\link{reduceResults}}

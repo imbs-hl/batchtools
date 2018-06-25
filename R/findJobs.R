@@ -17,9 +17,10 @@
 #' @template ids
 #' @template reg
 #' @return [\code{\link{data.table}}] with column \dQuote{job.id} containing matched jobs.
-#' @seealso \code{\link{getStatus}} \code{\link{JoinTables}}<`3`>
+#' @seealso \code{\link{getStatus}} \code{\link{JoinTables}}
 #' @export
 #' @examples
+#' \dontshow{ batchtools:::example_push_temp(1) }
 #' tmp = makeRegistry(file.dir = NA, make.default = FALSE)
 #' batchMap(identity, i = 1:3, reg = tmp)
 #' ids = findNotSubmitted(reg = tmp)
@@ -50,8 +51,8 @@ findJobs = function(expr, ids = NULL, reg = getDefaultRegistry()) {
   expr = substitute(expr)
   ee = parent.frame()
   fun = function(pars) eval(expr, pars, enclos = ee)
-  pars = NULL
-  setkeyv(mergedJobs(reg, ids, c("job.id", "pars"))[vlapply(pars, fun), "job.id"], "job.id")
+  job.pars = NULL
+  setkeyv(mergedJobs(reg, ids, c("job.id", "job.pars"))[vlapply(job.pars, fun), "job.id"], "job.id")
 }
 
 #' @export
@@ -75,13 +76,13 @@ findJobs = function(expr, ids = NULL, reg = getDefaultRegistry()) {
 #' @param repls [\code{integer}]\cr
 #'   Whitelist of replication numbers. If not provided, all replications are matched.
 findExperiments = function(ids = NULL, prob.name = NA_character_, prob.pattern = NA_character_, algo.name = NA_character_, algo.pattern = NA_character_, prob.pars, algo.pars, repls = NULL, reg = getDefaultRegistry()) {
-  assertExperimentRegistry(reg, sync = TRUE)
+  assertRegistry(reg, class = "ExperimentRegistry", sync = TRUE)
   assertString(prob.name, na.ok = TRUE, min.chars = 1L)
   assertString(prob.pattern, na.ok = TRUE, min.chars = 1L)
   assertString(algo.name, na.ok = TRUE, min.chars = 1L)
   assertString(algo.pattern, na.ok = TRUE, min.chars = 1L)
   ee = parent.frame()
-  tab = mergedJobs(reg, convertIds(reg, ids), c("job.id", "pars", "problem", "algorithm", "repl"))
+  tab = mergedJobs(reg, convertIds(reg, ids), c("job.id", "problem", "algorithm", "prob.pars", "algo.pars", "repl"))
 
   if (!is.na(prob.name)) {
     problem = NULL
@@ -111,16 +112,16 @@ findExperiments = function(ids = NULL, prob.name = NA_character_, prob.pattern =
 
   if (!missing(prob.pars)) {
     expr = substitute(prob.pars)
-    fun = function(pars) eval(expr, pars$prob.pars, enclos = ee)
-    pars = NULL
-    tab = tab[vlapply(pars, fun)]
+    fun = function(pars) eval(expr, pars, enclos = ee)
+    prob.pars = NULL
+    tab = tab[vlapply(prob.pars, fun)]
   }
 
   if (!missing(algo.pars)) {
     expr = substitute(algo.pars)
-    fun = function(pars) eval(expr, pars$algo.pars, enclos = ee)
-    pars = NULL
-    tab = tab[vlapply(pars, fun)]
+    fun = function(pars) eval(expr, pars, enclos = ee)
+    algo.pars = NULL
+    tab = tab[vlapply(algo.pars, fun)]
   }
 
   setkeyv(tab[, "job.id"], "job.id")[]
